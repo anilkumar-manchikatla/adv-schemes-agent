@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 from openai import OpenAI
 
 # =================================================
@@ -12,7 +13,7 @@ st.set_page_config(
 
 st.title("🏛️ Government Scheme Intelligence Dashboard")
 st.caption(
-    "Data-driven dashboards with AI-assisted review notes. "
+    "Rule-based analytics with AI-assisted review notes. "
     "All decisions remain with officers."
 )
 
@@ -26,7 +27,7 @@ if "OPENAI_API_KEY" not in st.secrets:
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # =================================================
-# LOCKED SYSTEM PROMPT
+# SYSTEM PROMPT (LOCKED)
 # =================================================
 SYSTEM_PROMPT = """
 ROLE:
@@ -34,11 +35,11 @@ You are a Government Scheme Performance Review Assistant.
 
 RULES:
 1. Use formal Government language suitable for official review meetings.
-2. Base all analysis strictly on the provided numerical data and computed indicators.
+2. Base analysis strictly on the provided numerical data and computed indicators.
 3. Do not invent causes, explanations, or policy recommendations unless explicitly asked.
 4. Highlight key risks, average performers, and good performers objectively.
 5. If information is insufficient, clearly state so.
-6. Continue responses fully if the analysis is long.
+6. Continue responses fully if analysis is long.
 
 OUTPUT:
 - Structured bullet points
@@ -80,12 +81,12 @@ districts = ["All"] + sorted(df["District"].dropna().unique().tolist())
 selected_district = st.selectbox("Select District", districts)
 
 if selected_district != "All":
-    df_filtered = df[df["District"] == selected_district]
+    df_filtered = df[df["District"] == selected_district].copy()
 else:
     df_filtered = df.copy()
 
 # =================================================
-# RULE-BASED RISK CLASSIFICATION
+# RULE-BASED RISK LOGIC
 # =================================================
 def risk_level(util):
     if util < 65:
@@ -131,28 +132,44 @@ st.subheader("📊 Dashboards")
 
 colA, colB = st.columns(2)
 
+# ---- Bar Chart
 with colA:
     st.markdown("**Utilisation (%) by Scheme**")
     st.bar_chart(
         df_filtered.set_index("Scheme Name")["% Utilisation"]
     )
 
+# ---- Pie Chart (Matplotlib – Stable)
 with colB:
     st.markdown("**Scheme Status Distribution**")
-    st.pie_chart(df_filtered["Status"].value_counts())
+    status_counts = df_filtered["Status"].value_counts()
 
-st.subheader("🏛️ Central vs State Scheme Comparison")
+    fig, ax = plt.subplots()
+    ax.pie(
+        status_counts.values,
+        labels=status_counts.index,
+        autopct="%1.1f%%",
+        startangle=90
+    )
+    ax.axis("equal")
+    st.pyplot(fig)
+
+# ---- Central vs State
+st.subheader("🏛️ Central vs State Scheme Performance")
+
 comparison = (
     df_filtered
     .groupby("Scheme Type (Central/State)")["% Utilisation"]
     .mean()
 )
+
 st.bar_chart(comparison)
 
 # =================================================
 # RISK TABLE
 # =================================================
 st.subheader("🚦 Risk Classification Table")
+
 st.dataframe(
     df_filtered[
         [
@@ -168,12 +185,12 @@ st.dataframe(
 )
 
 # =================================================
-# AI REVIEW NOTE SECTION
+# AI REVIEW NOTE
 # =================================================
 st.subheader("🧠 AI-Assisted Review Note")
 
 ai_query = st.text_input(
-    "Optional instruction (or leave blank for standard review note)",
+    "Optional instruction (or leave default)",
     value="Prepare a concise review note highlighting key risks, average performers, and good performers."
 )
 
